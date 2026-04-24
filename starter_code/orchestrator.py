@@ -45,7 +45,8 @@ def main():
             return False
         try:
             doc = UnifiedDocument(**candidate)
-            final_kb.append(doc.dict())
+            # Use mode='json' to ensure datetime objects are serialized to strings
+            final_kb.append(doc.model_dump(mode='json'))
             print(f"Added: {doc.document_id} ({doc.source_type})")
             return True
         except Exception as e:

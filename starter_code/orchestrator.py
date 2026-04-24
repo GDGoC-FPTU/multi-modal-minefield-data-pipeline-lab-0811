@@ -36,13 +36,70 @@ def main():
     # ----------------------------------------------
 
     # TODO: Call each processing function (extract_pdf_data, clean_transcript, etc.)
-    # TODO: Run quality gates (run_quality_gate) before adding to final_kb
-    # TODO: Save final_kb to output_path using json.dump
-    
-    # Example:
-    # doc = extract_pdf_data(pdf_path)
-    # if doc and run_quality_gate(doc):
-    #     final_kb.append(doc)
+    # Call processors, run quality gates, and collect validated docs
+    def _validate_and_append(candidate):
+        if not candidate or not isinstance(candidate, dict):
+            return False
+        if not run_quality_gate(candidate):
+            print(f"Rejected by quality gate: {candidate.get('document_id', '<unknown>')}")
+            return False
+        try:
+            doc = UnifiedDocument(**candidate)
+            final_kb.append(doc.dict())
+            print(f"Added: {doc.document_id} ({doc.source_type})")
+            return True
+        except Exception as e:
+            print(f"Validation failed for {candidate.get('document_id', '<unknown>')}: {e}")
+            return False
+
+    # Process PDF
+    try:
+        pdf_doc = extract_pdf_data(pdf_path)
+        _validate_and_append(pdf_doc)
+    except Exception as e:
+        print(f"Error processing PDF: {e}")
+
+    # Process Transcript
+    try:
+        trans_doc = clean_transcript(trans_path)
+        _validate_and_append(trans_doc)
+    except Exception as e:
+        print(f"Error processing Transcript: {e}")
+
+    # Process HTML catalog (may return list)
+    try:
+        html_docs = parse_html_catalog(html_path)
+        if isinstance(html_docs, dict):
+            html_docs = [html_docs]
+        for d in (html_docs or []):
+            _validate_and_append(d)
+    except Exception as e:
+        print(f"Error processing HTML catalog: {e}")
+
+    # Process CSV sales (may return list)
+    try:
+        csv_docs = process_sales_csv(csv_path)
+        if isinstance(csv_docs, dict):
+            csv_docs = [csv_docs]
+        for d in (csv_docs or []):
+            _validate_and_append(d)
+    except Exception as e:
+        print(f"Error processing CSV: {e}")
+
+    # Process legacy code
+    try:
+        code_doc = extract_logic_from_code(code_path)
+        _validate_and_append(code_doc)
+    except Exception as e:
+        print(f"Error processing legacy code: {e}")
+
+    # Save final_kb to disk
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(final_kb, f, ensure_ascii=False, indent=2)
+        print(f"Pipeline finished! Saved {len(final_kb)} records to {output_path}")
+    except Exception as e:
+        print(f"Failed to write output file {output_path}: {e}")
 
     end_time = time.time()
     print(f"Pipeline finished in {end_time - start_time:.2f} seconds.")
